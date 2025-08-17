@@ -153,7 +153,7 @@ void ReadFile(std::fstream& inputFile, GameBoard<char>& board) {
 
 int main() {
 
-    std::fstream inputFile("/home/john/CLionProjects/GameOfLife/input.txt", std::fstream::in);
+    std::fstream inputFile("input.txt", std::fstream::in);
     if (!inputFile.is_open()) {
         throw std::runtime_error("Error opening input file!");
     }
