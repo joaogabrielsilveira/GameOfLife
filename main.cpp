@@ -1,10 +1,10 @@
 #include <fstream>
 #include <iostream>
-#include <unistd.h>
 #include <vector>
+#include <thread>
 
-#define BOARD_HEIGHT 5
-#define BOARD_WIDTH 5
+#define DEFAULT_BOARD_HEIGHT 5
+#define DEFAULT_BOARD_WIDTH 5
 
 #define TRUE_VALUE '1'
 #define FALSE_VALUE '0'
@@ -36,7 +36,12 @@ public:
     void Print() const {
         for (int i = 0; i < _lines; i++) {
             for (int j = 0; j < _cols; j++) {
-                std::cout << (*this)(i, j) << " ";
+                if ((*this)(i, j) == TRUE_VALUE) {
+                    std::cout << " 🟩";
+                }
+                else {
+                    std::cout << " ⬜";
+                }
             }
             std::cout << "\n";
         }
@@ -51,7 +56,7 @@ private:
 template <typename T>
 class GameBoard {
 public:
-    GameBoard() : _height(BOARD_HEIGHT), _width(BOARD_WIDTH) {
+    GameBoard() : _height(DEFAULT_BOARD_HEIGHT), _width(DEFAULT_BOARD_WIDTH) {
         _board = Matrix<T>(_height, _width);
     };
 
@@ -121,7 +126,7 @@ public:
                     }
                 }
                 else if (currentValue == TRUE_VALUE) {
-                    if (currentNeighbors == 2) {
+                    if (currentNeighbors == 2 || currentNeighbors == 3) {
                         nextBoard(line, col) = TRUE_VALUE;
                     }
                 }
@@ -132,8 +137,8 @@ public:
     };
 
 private:
-    int _height = BOARD_HEIGHT;
-    int _width = BOARD_WIDTH;
+    int _height;
+    int _width;
     Matrix<T> _board;
 };
 
@@ -161,11 +166,12 @@ int main() {
     GameBoard<char> board;
     ReadFile(inputFile, board);
 
-    board.Print();
-
-    while (std::cin.get()) {
-        board.AdvanceBoardState();
+    int generation = 0;
+    while (++generation <= 100) {
+        std::cout << "\nGeneration " << generation << "\n";
         board.Print();
+        board.AdvanceBoardState();
+        std::this_thread::sleep_for(std::chrono_literals::operator ""ms(1000));
     }
 
     return 0;
