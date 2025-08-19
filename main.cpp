@@ -13,6 +13,9 @@
 #define WINDOW_WIDTH 800
 #define WINDOW_HEIGHT 600
 
+template<typename T>
+class GameBoard;
+
 template <typename T>
 class Matrix {
 public:
@@ -25,14 +28,18 @@ public:
 
     T& operator()(const int line, const int col) {
         if (line < 0 || col < 0 || line >= _lines || col >= _cols) {
-            throw std::out_of_range("Invalid matrix positions!");
+            throw std::out_of_range("Invalid matrix positions! Line: " + std::to_string(line)
+                + ", Col: " + std::to_string(col));
         }
         return _data[line * _cols + col];
     };
 
     T const& operator()(const int line, const int col) const {
         if (line < 0 || col < 0 || line >= _lines || col >= _cols) {
-            throw std::out_of_range("Invalid matrix positions!");
+            throw std::out_of_range("Invalid matrix positions!"
+            " Line: " + std::to_string(line) + ", Col: " + std::to_string(col)
+            + " (Borders: " + std::to_string(_lines - 1) + ", " + std::to_string(_cols - 1) + ")"
+            );
         }
         return _data[line * _cols + col];
     };
@@ -55,6 +62,8 @@ private:
     int _lines = 0;
     int _cols = 0;
     std::vector<T> _data;
+
+    friend class GameBoard<T>;
 };
 
 template <typename T>
@@ -104,18 +113,29 @@ public:
         return _totalCount;
     };
 
-    void Render(SDL_Renderer* renderer, const int squareSize = 4) const {
+    [[nodiscard]] int GetLines() const {
+        return _board._lines;
+    }
+
+    [[nodiscard]] int GetCols() const {
+        return _board._cols;
+    }
+
+    void Render(SDL_Renderer* renderer, const int squareWid = 1, const int squareHei = 1) const {
         std::vector<SDL_Rect> liveSquares;
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
         SDL_RenderClear(renderer);
-        SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255);
-        for (int i = 0; i < _width; i++) {
+        SDL_SetRenderDrawColor(renderer, 0, 255, 255, 255);
+        for (int i = 0; i < _height; i++) {
             for (int j = 0; j < _width; j++) {
                 if (_board(i,j) == TRUE_VALUE) {
-                    SDL_Rect square = {j * squareSize, i * squareSize, squareSize, squareSize};
+                    SDL_Rect square = {j * squareWid, i * squareHei, squareWid, squareHei};
                     liveSquares.push_back(square);
                 }
             }
+        }
+        for (auto& r : liveSquares) {
+            std::cout << "renderizando " << r.x << " " << r.y << "\n";
         }
         SDL_RenderFillRects(renderer, liveSquares.data(), static_cast<int>(liveSquares.size()));
         SDL_RenderPresent(renderer);
@@ -180,7 +200,7 @@ private:
 void ReadFile(std::fstream& inputFile, GameBoard<char>& board) {
     int currentLine, currentCol;
     inputFile >> currentLine >> currentCol;
-    board = GameBoard<char>();
+    board = GameBoard<char>(currentLine, currentCol);
 
     int liveCells;
     inputFile >> liveCells;
@@ -208,8 +228,8 @@ int main(const int argc, char ** argv) {
         "Game of Life",
         SDL_WINDOWPOS_CENTERED,
         SDL_WINDOWPOS_CENTERED,
-        800,
-        600,
+        WINDOW_WIDTH,
+        WINDOW_HEIGHT,
         SDL_WINDOW_SHOWN
         );
     SDL_Renderer* renderer = SDL_CreateRenderer(
@@ -221,6 +241,9 @@ int main(const int argc, char ** argv) {
     SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
     int generation = 0;
     bool isRunning = true;
+
+    const int sizeRatioX = 800 / board.GetCols();
+    const int sizeRatioY = 600 / board.GetLines();
 
     while (isRunning && ++generation <= maxGenerations) {
         SDL_Event event;
@@ -240,7 +263,7 @@ int main(const int argc, char ** argv) {
             board.Print();
         }
         else {
-            board.Render(renderer);
+            board.Render(renderer, sizeRatioX, sizeRatioY);
         }
         board.AdvanceBoardState();
         std::this_thread::sleep_for(std::chrono_literals::operator ""ms(500));
@@ -252,7 +275,6 @@ int main(const int argc, char ** argv) {
 
     std::cout << "A vida durou " << generation << " gerações, e terminou com " << board.GetCurrentCount()
     << " células vivas. No total, a vida foi criada " << board.GetTotalCount() << " vezes.\n";
-    std::cin.get();
 
     return 0;
 }
