@@ -2,12 +2,16 @@
 #include <iostream>
 #include <vector>
 #include <thread>
+#include <SDL.h>
 
-#define DEFAULT_BOARD_HEIGHT 5
-#define DEFAULT_BOARD_WIDTH 5
+#define DEFAULT_BOARD_HEIGHT 800
+#define DEFAULT_BOARD_WIDTH 600
 
 #define TRUE_VALUE '1'
 #define FALSE_VALUE '0'
+
+#define WINDOW_WIDTH 800
+#define WINDOW_HEIGHT 600
 
 template <typename T>
 class Matrix {
@@ -56,11 +60,11 @@ private:
 template <typename T>
 class GameBoard {
 public:
-    GameBoard() : _height(DEFAULT_BOARD_HEIGHT), _width(DEFAULT_BOARD_WIDTH) {
+    GameBoard() : _height(DEFAULT_BOARD_HEIGHT), _width(DEFAULT_BOARD_WIDTH), _currentCount(0), _totalCount(0)  {
         _board = Matrix<T>(_height, _width);
     };
 
-    GameBoard(const int height, const int width) : _height(height), _width(width) {
+    GameBoard(const int height, const int width) : _height(height), _width(width), _currentCount(0), _totalCount(0) {
         _board = Matrix<T>(height, width);
     };
 
@@ -92,6 +96,31 @@ public:
         _board.Print();
     };
 
+    [[nodiscard]] int GetCurrentCount() const {
+        return _currentCount;
+    };
+
+    [[nodiscard]] int GetTotalCount() const {
+        return _totalCount;
+    };
+
+    void Render(SDL_Renderer* renderer, const int squareSize = 4) const {
+        std::vector<SDL_Rect> liveSquares;
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+        SDL_RenderClear(renderer);
+        SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255);
+        for (int i = 0; i < _width; i++) {
+            for (int j = 0; j < _width; j++) {
+                if (_board(i,j) == TRUE_VALUE) {
+                    SDL_Rect square = {j * squareSize, i * squareSize, squareSize, squareSize};
+                    liveSquares.push_back(square);
+                }
+            }
+        }
+        SDL_RenderFillRects(renderer, liveSquares.data(), static_cast<int>(liveSquares.size()));
+        SDL_RenderPresent(renderer);
+    };
+
     [[nodiscard]] int CountNeighbors(const int line, const int col) const {
         int currentLine, currentCol;
         int counter = 0;
@@ -115,6 +144,7 @@ public:
     };
 
     void AdvanceBoardState() {
+        _currentCount = 0;
         Matrix<T> nextBoard(_height, _width);
         for (int line = 0; line < _height; line++) {
             for (int col = 0; col < _width; col++) {
@@ -122,11 +152,14 @@ public:
                 const int currentNeighbors = CountNeighbors(line, col);
                 if (currentValue == FALSE_VALUE) {
                     if (currentNeighbors == 3) {
+                        _totalCount++;
                         nextBoard(line, col) = TRUE_VALUE;
                     }
                 }
                 else if (currentValue == TRUE_VALUE) {
+                    _currentCount++;
                     if (currentNeighbors == 2 || currentNeighbors == 3) {
+                        _totalCount++;
                         nextBoard(line, col) = TRUE_VALUE;
                     }
                 }
@@ -140,12 +173,14 @@ private:
     int _height;
     int _width;
     Matrix<T> _board;
+    int _currentCount;
+    int _totalCount;
 };
 
 void ReadFile(std::fstream& inputFile, GameBoard<char>& board) {
     int currentLine, currentCol;
     inputFile >> currentLine >> currentCol;
-    board = GameBoard<char>(currentLine, currentCol);
+    board = GameBoard<char>();
 
     int liveCells;
     inputFile >> liveCells;
@@ -156,9 +191,11 @@ void ReadFile(std::fstream& inputFile, GameBoard<char>& board) {
     }
 };
 
-int main() {
+int main(const int argc, char ** argv) {
 
-    std::fstream inputFile("input.txt", std::fstream::in);
+    int maxGenerations = 100;
+    if (argc >= 3) maxGenerations = std::stoi(argv[2]);
+    std::fstream inputFile(argv[1], std::fstream::in);
     if (!inputFile.is_open()) {
         throw std::runtime_error("Error opening input file!");
     }
@@ -166,13 +203,56 @@ int main() {
     GameBoard<char> board;
     ReadFile(inputFile, board);
 
+    SDL_Init(SDL_INIT_VIDEO);
+    SDL_Window* window = SDL_CreateWindow(
+        "Game of Life",
+        SDL_WINDOWPOS_CENTERED,
+        SDL_WINDOWPOS_CENTERED,
+        800,
+        600,
+        SDL_WINDOW_SHOWN
+        );
+    SDL_Renderer* renderer = SDL_CreateRenderer(
+        window,
+        -1,
+        SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC
+        );
+
+    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
     int generation = 0;
-    while (++generation <= 100) {
-        std::cout << "\nGeneration " << generation << "\n";
-        board.Print();
+    bool isRunning = true;
+
+    while (isRunning && ++generation <= maxGenerations) {
+        SDL_Event event;
+        while (SDL_PollEvent(&event)) {
+            if (event.type == SDL_QUIT) {
+                isRunning = false;
+            }
+        }
+        if (window == nullptr) {
+            std::cout << "\nGeneration " << generation << "\n";
+        }
+        else {
+            std::string windowTitle = "Game of Life - Generation " + std::to_string(generation);
+            SDL_SetWindowTitle(window, windowTitle.c_str());
+        }
+        if (renderer == nullptr) {
+            board.Print();
+        }
+        else {
+            board.Render(renderer);
+        }
         board.AdvanceBoardState();
-        std::this_thread::sleep_for(std::chrono_literals::operator ""ms(1000));
+        std::this_thread::sleep_for(std::chrono_literals::operator ""ms(500));
     }
+
+    SDL_DestroyRenderer(renderer);
+    SDL_DestroyWindow(window);
+    SDL_Quit();
+
+    std::cout << "A vida durou " << generation << " gerações, e terminou com " << board.GetCurrentCount()
+    << " células vivas. No total, a vida foi criada " << board.GetTotalCount() << " vezes.\n";
+    std::cin.get();
 
     return 0;
 }
