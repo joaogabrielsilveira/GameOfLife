@@ -134,9 +134,7 @@ public:
                 }
             }
         }
-        for (auto& r : liveSquares) {
-            std::cout << "renderizando " << r.x << " " << r.y << "\n";
-        }
+
         SDL_RenderFillRects(renderer, liveSquares.data(), static_cast<int>(liveSquares.size()));
         SDL_RenderPresent(renderer);
     };
