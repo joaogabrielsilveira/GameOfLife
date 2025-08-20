@@ -1,8 +1,10 @@
 #include <fstream>
 #include <iostream>
+#include <list>
 #include <vector>
 #include <thread>
 #include <SDL.h>
+#include <set>
 
 #define DEFAULT_BOARD_HEIGHT 800
 #define DEFAULT_BOARD_WIDTH 600
@@ -28,8 +30,10 @@ public:
 
     T& operator()(const int line, const int col) {
         if (line < 0 || col < 0 || line >= _lines || col >= _cols) {
-            throw std::out_of_range("Invalid matrix positions! Line: " + std::to_string(line)
-                + ", Col: " + std::to_string(col));
+            throw std::out_of_range("Invalid matrix positions!"
+            " Line: " + std::to_string(line) + ", Col: " + std::to_string(col)
+            + " (Borders: " + std::to_string(_lines - 1) + ", " + std::to_string(_cols - 1) + ")"
+            );
         }
         return _data[line * _cols + col];
     };
@@ -69,11 +73,11 @@ private:
 template <typename T>
 class GameBoard {
 public:
-    GameBoard() : _height(DEFAULT_BOARD_HEIGHT), _width(DEFAULT_BOARD_WIDTH), _currentCount(0), _totalCount(0)  {
+    GameBoard() : _height(DEFAULT_BOARD_HEIGHT), _width(DEFAULT_BOARD_WIDTH), _totalCount(0)  {
         _board = Matrix<T>(_height, _width);
     };
 
-    GameBoard(const int height, const int width) : _height(height), _width(width), _currentCount(0), _totalCount(0) {
+    GameBoard(const int height, const int width) : _height(height), _width(width), _totalCount(0) {
         _board = Matrix<T>(height, width);
     };
 
@@ -87,26 +91,12 @@ public:
         return _board(line, col);
     };
 
-    void SetTrue (const int line, const int col) {
-        if (line < 0 || col < 0 || line >= _height || col >= _width) {
-            throw std::out_of_range("Invalid board positions!");
-        }
-        _board(line, col) = TRUE_VALUE;
-    };
-
-    void SetFalse(const int line, const int col) {
-        if (line < 0 || col < 0 || line >= _height || col >= _width) {
-            throw std::out_of_range("Invalid board positions!");
-        }
-        _board(line, col) = FALSE_VALUE;
-    };
-
     void Print() const {
         _board.Print();
     };
 
     [[nodiscard]] int GetCurrentCount() const {
-        return _currentCount;
+        return _lifePositions.size();
     };
 
     [[nodiscard]] int GetTotalCount() const {
@@ -125,16 +115,14 @@ public:
         std::vector<SDL_Rect> liveSquares;
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
         SDL_RenderClear(renderer);
-        SDL_SetRenderDrawColor(renderer, 0, 255, 255, 255);
-        for (int i = 0; i < _height; i++) {
-            for (int j = 0; j < _width; j++) {
-                if (_board(i,j) == TRUE_VALUE) {
-                    SDL_Rect square = {j * squareWid, i * squareHei, squareWid, squareHei};
-                    liveSquares.push_back(square);
-                }
-            }
-        }
+        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
 
+        for (auto& coord : _lifePositions) {
+            const int x = coord.first;
+            const int y = coord.second;
+            SDL_Rect square = {y * squareWid, x * squareHei, squareWid, squareHei};
+            liveSquares.push_back(square);
+        }
         SDL_RenderFillRects(renderer, liveSquares.data(), static_cast<int>(liveSquares.size()));
         SDL_RenderPresent(renderer);
     };
@@ -162,7 +150,7 @@ public:
     };
 
     void AdvanceBoardState() {
-        _currentCount = 0;
+        _totalCount += _lifePositions.size();
         Matrix<T> nextBoard(_height, _width);
         for (int line = 0; line < _height; line++) {
             for (int col = 0; col < _width; col++) {
@@ -172,13 +160,17 @@ public:
                     if (currentNeighbors == 3) {
                         _totalCount++;
                         nextBoard(line, col) = TRUE_VALUE;
+                        _lifePositions.emplace(line, col);
                     }
                 }
                 else if (currentValue == TRUE_VALUE) {
-                    _currentCount++;
                     if (currentNeighbors == 2 || currentNeighbors == 3) {
                         _totalCount++;
                         nextBoard(line, col) = TRUE_VALUE;
+                        _lifePositions.emplace(line, col);
+                    }
+                    else {
+                        _lifePositions.erase(std::pair<int,int>(line, col));
                     }
                 }
             }
@@ -187,15 +179,48 @@ public:
         _board = nextBoard;
     };
 
+    void SaveToFile(std::ofstream& file) const {
+        file << GetLines();
+        file << " ";
+        file << GetCols();
+        file << std::endl;
+
+        file << _lifePositions.size();
+        file << std::endl;
+
+        for (auto& coord : _lifePositions) {
+            file << coord.first;
+            file << " ";
+            file << coord.second;
+            file << std::endl;
+        }
+    }
+
+    void CreateLife(const int line, const int col) {
+        if (line < 0 || col < 0 || line >= _height || col >= _width) {
+            throw std::out_of_range("Invalid board positions!");
+        }
+        _board(line, col) = TRUE_VALUE;
+        _lifePositions.emplace(line, col);
+    };
+
+    void DestroyLife(const int line, const int col) {
+        if (line < 0 || col < 0 || line >= _height || col >= _width) {
+            throw std::out_of_range("Invalid board positions!");
+        }
+        _board(line, col) = FALSE_VALUE;
+        _lifePositions.erase(std::pair<int,int>(line, col));
+    };
+
 private:
     int _height;
     int _width;
     Matrix<T> _board;
-    int _currentCount;
+    std::set<std::pair<int, int>> _lifePositions = std::set<std::pair<int, int>>();
     int _totalCount;
 };
 
-void ReadFile(std::fstream& inputFile, GameBoard<char>& board) {
+void ReadFile(std::ifstream& inputFile, GameBoard<char>& board) {
     int currentLine, currentCol;
     inputFile >> currentLine >> currentCol;
     board = GameBoard<char>(currentLine, currentCol);
@@ -205,18 +230,25 @@ void ReadFile(std::fstream& inputFile, GameBoard<char>& board) {
 
     for (int cell = 0; cell < liveCells; cell++) {
         inputFile >> currentLine >> currentCol;
-        board.SetTrue(currentLine, currentCol);
+        board.CreateLife(currentLine, currentCol);
     }
 };
 
 int main(const int argc, char ** argv) {
-
-    int maxGenerations = 100;
+    int maxGenerations = 1000000;
     if (argc >= 3) maxGenerations = std::stoi(argv[2]);
-    std::fstream inputFile(argv[1], std::fstream::in);
+
+    std::ifstream inputFile(argv[1]);
     if (!inputFile.is_open()) {
         throw std::runtime_error("Error opening input file!");
     }
+
+    int fileCount = 0;
+    std::ifstream fileCounterIn("fileCounter.txt");
+    if (!fileCounterIn.is_open()) {
+        throw std::runtime_error("Error opening count file!");
+    }
+    fileCounterIn >> fileCount;
 
     GameBoard<char> board;
     ReadFile(inputFile, board);
@@ -240,16 +272,97 @@ int main(const int argc, char ** argv) {
     int generation = 0;
     bool isRunning = true;
 
-    const int sizeRatioX = 800 / board.GetCols();
-    const int sizeRatioY = 600 / board.GetLines();
+    const int sizeRatioX = WINDOW_WIDTH / board.GetCols();
+    const int sizeRatioY = WINDOW_HEIGHT / board.GetLines();
 
-    while (isRunning && ++generation <= maxGenerations) {
+    const double srxF = static_cast<double>(WINDOW_WIDTH) / board.GetCols();
+    const double sryF = static_cast<double>(WINDOW_HEIGHT) / board.GetLines();
+
+    if (ceil(srxF) > sizeRatioX && ceil(sryF) > sizeRatioY) {
+        SDL_SetWindowSize(window, board.GetCols() * sizeRatioX, board.GetLines() * sizeRatioY);
+    }
+
+    else if (ceil(sryF) > sizeRatioY) {
+        SDL_SetWindowSize(window, WINDOW_WIDTH, board.GetLines() * sizeRatioY);
+    }
+
+    else if (ceil(srxF) > sizeRatioX) {
+        SDL_SetWindowSize(window, board.GetCols() * sizeRatioX, WINDOW_HEIGHT);
+    }
+
+    bool paused = false;
+    bool mouseHeldLeft = false;
+    bool mouseHeldRight = false;
+
+    while (isRunning && generation <= maxGenerations) {
+        if (!paused) {
+            generation++;
+        }
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
-            if (event.type == SDL_QUIT) {
-                isRunning = false;
+            switch (event.type) {
+                case SDL_QUIT:
+                    isRunning = false;
+                    break;
+                case SDL_MOUSEBUTTONDOWN:
+                    if (event.button.button == SDL_BUTTON_LEFT) {
+                        int mouseX = event.button.x;
+                        int mouseY = event.button.y;
+                        if (mouseX < WINDOW_WIDTH && mouseY < WINDOW_HEIGHT) {
+                            board.CreateLife(mouseY / sizeRatioY, mouseX / sizeRatioX);
+                        }
+                        mouseHeldLeft = true;
+                    }
+                    else if (event.button.button == SDL_BUTTON_RIGHT) {
+                        int mouseX = event.button.x;
+                        int mouseY = event.button.y;
+                        if (mouseX < WINDOW_WIDTH && mouseY < WINDOW_HEIGHT) {
+                            board.CreateLife(mouseY / sizeRatioY, mouseX / sizeRatioX);
+                        }
+                        mouseHeldRight = true;
+                    }
+                    break;
+                case SDL_MOUSEBUTTONUP:
+                    if (event.button.button == SDL_BUTTON_LEFT) {
+                        mouseHeldLeft = false;
+                    }
+                    if (event.button.button == SDL_BUTTON_RIGHT) {
+                        mouseHeldRight = false;
+                    }
+                    break;
+                case SDL_MOUSEMOTION:
+                    if (mouseHeldLeft) {
+                        int mouseX = event.motion.x;
+                        int mouseY = event.motion.y;
+                        if (mouseX < WINDOW_WIDTH && mouseY < WINDOW_HEIGHT) {
+                            board.CreateLife(mouseY / sizeRatioY, mouseX / sizeRatioX);
+                        }
+                    }
+
+                    else if (mouseHeldRight) {
+                        int mouseX = event.motion.x;
+                        int mouseY = event.motion.y;
+                        if (mouseX < WINDOW_WIDTH && mouseY < WINDOW_HEIGHT) {
+                            board.DestroyLife(mouseY / sizeRatioY, mouseX / sizeRatioX);
+                        }
+                    }
+                    break;
+                case SDL_KEYDOWN:
+                    if (event.key.keysym.sym == SDLK_SPACE) {
+                        paused = !paused;
+                    }
+                    if (event.key.keysym.sym == SDLK_BACKSPACE) {
+                        fileCount++;
+                        std::ofstream outputFile("saves/saved_file_" + std::to_string(fileCount) + ".txt");
+                        board.SaveToFile(outputFile);
+                        outputFile.close();
+                    }
+                    break;
+                default:
+                    break;
             }
         }
+
         if (window == nullptr) {
             std::cout << "\nGeneration " << generation << "\n";
         }
@@ -263,15 +376,28 @@ int main(const int argc, char ** argv) {
         else {
             board.Render(renderer, sizeRatioX, sizeRatioY);
         }
-        board.AdvanceBoardState();
-        std::this_thread::sleep_for(std::chrono_literals::operator ""ms(500));
+        if (!paused) {
+            board.AdvanceBoardState();
+        }
+        std::this_thread::sleep_for(std::chrono_literals::operator ""ms(100));
     }
 
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
     SDL_Quit();
 
-    std::cout << "A vida durou " << generation << " gerações, e terminou com " << board.GetCurrentCount()
+    fileCounterIn.close();
+    
+    std::ofstream fileCounterOut("fileCounter.txt");
+    if (!fileCounterOut.is_open()) {
+        throw std::runtime_error("Error opening count file!");
+    }
+    fileCounterOut << fileCount;
+
+    fileCounterOut.close();
+    inputFile.close();
+
+    std::cout << "A simulação durou por " << generation << " gerações, e terminou com " << board.GetCurrentCount()
     << " células vivas. No total, a vida foi criada " << board.GetTotalCount() << " vezes.\n";
 
     return 0;
