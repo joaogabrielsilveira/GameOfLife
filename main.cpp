@@ -1,6 +1,5 @@
 #include <fstream>
 #include <iostream>
-#include <list>
 #include <vector>
 #include <thread>
 #include <SDL.h>
@@ -317,7 +316,7 @@ int main(const int argc, char ** argv) {
                         int mouseX = event.button.x;
                         int mouseY = event.button.y;
                         if (mouseX < WINDOW_WIDTH && mouseY < WINDOW_HEIGHT) {
-                            board.CreateLife(mouseY / sizeRatioY, mouseX / sizeRatioX);
+                            board.DestroyLife(mouseY / sizeRatioY, mouseX / sizeRatioX);
                         }
                         mouseHeldRight = true;
                     }
@@ -334,7 +333,7 @@ int main(const int argc, char ** argv) {
                     if (mouseHeldLeft) {
                         int mouseX = event.motion.x;
                         int mouseY = event.motion.y;
-                        if (mouseX < WINDOW_WIDTH && mouseY < WINDOW_HEIGHT) {
+                        if (mouseX < WINDOW_WIDTH && mouseY < WINDOW_HEIGHT && mouseX >= 0 && mouseY >= 0) {
                             board.CreateLife(mouseY / sizeRatioY, mouseX / sizeRatioX);
                         }
                     }
@@ -342,7 +341,7 @@ int main(const int argc, char ** argv) {
                     else if (mouseHeldRight) {
                         int mouseX = event.motion.x;
                         int mouseY = event.motion.y;
-                        if (mouseX < WINDOW_WIDTH && mouseY < WINDOW_HEIGHT) {
+                        if (mouseX < WINDOW_WIDTH && mouseY < WINDOW_HEIGHT && mouseX >= 0 && mouseY >= 0) {
                             board.DestroyLife(mouseY / sizeRatioY, mouseX / sizeRatioX);
                         }
                     }
