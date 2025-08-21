@@ -1,3 +1,4 @@
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <vector>
@@ -13,6 +14,8 @@
 
 #define WINDOW_WIDTH 800
 #define WINDOW_HEIGHT 600
+
+std::string savesPath = "saves";
 
 template<typename T>
 class GameBoard;
@@ -72,13 +75,11 @@ private:
 template <typename T>
 class GameBoard {
 public:
-    GameBoard() : _height(DEFAULT_BOARD_HEIGHT), _width(DEFAULT_BOARD_WIDTH), _totalCount(0)  {
-        _board = Matrix<T>(_height, _width);
-    };
+    GameBoard() : _height(DEFAULT_BOARD_HEIGHT), _width(DEFAULT_BOARD_WIDTH), _totalCount(0),
+    _board(Matrix<T>(_height, _width)), _lifePositions(std::set<std::pair<int, int>>()) {};
 
-    GameBoard(const int height, const int width) : _height(height), _width(width), _totalCount(0) {
-        _board = Matrix<T>(height, width);
-    };
+    GameBoard(const int height, const int width) : _height(height), _width(width), _totalCount(0),
+    _board (Matrix<T>(height, width)), _lifePositions(std::set<std::pair<int, int>>()) {};
 
     ~GameBoard() = default;
 
@@ -214,9 +215,9 @@ public:
 private:
     int _height;
     int _width;
-    Matrix<T> _board;
-    std::set<std::pair<int, int>> _lifePositions = std::set<std::pair<int, int>>();
     int _totalCount;
+    Matrix<T> _board;
+    std::set<std::pair<int, int>> _lifePositions;
 };
 
 void ReadFile(std::ifstream& inputFile, GameBoard<char>& board) {
@@ -233,14 +234,96 @@ void ReadFile(std::ifstream& inputFile, GameBoard<char>& board) {
     }
 };
 
+int GetNumber() {
+    int n;
+    while (!(std::cin >> n)) {
+        std::cout << "Entrada inválida, insira um número\n";
+        std::cin.clear();
+        std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+    }
+    return n;
+}
+
+std::string MainMenu(std::ifstream& in) {
+    while (true) {
+        std::cout
+        << "\n Selecione um modo de jogo pra começar:"
+        << "\n [1] - Tabuleiro Vazio"
+        << "\n [2] - Arquivo Salvo"
+        << "\n [3] - Sair"
+        << "\n";
+        const int choice = GetNumber();
+        switch (choice) {
+            case 1: {
+                while (true) {
+                    std::cout
+                    << "\nEscolha um tamanho de tabuleiro:"
+                    << "\n[1] - 10x10"
+                    << "\n[2] - 25x25"
+                    << "\n[3] - 50x50"
+                    << "\n[4] - 100x100"
+                    << "\n[5] - Voltar"
+                    << "\n";
+                    const int sizeChoice = GetNumber();
+                    if (sizeChoice >= 1 && sizeChoice <= 4) {
+                        const std::vector<std::string> canvasFiles = {
+                            "10_10_canvas.txt",
+                            "25_25_canvas.txt",
+                            "50_50_canvas.txt",
+                            "100_100_canvas.txt"
+                        };
+                        return canvasFiles[sizeChoice - 1];
+                    }
+                    else {
+                        break;
+                    }
+                }
+                break;
+            }
+            case 2: {
+                std::vector<std::string> savedFiles;
+                if (std::filesystem::exists(savesPath)) {
+                    for (const auto& file : std::filesystem::directory_iterator(savesPath)) {
+                        savedFiles.push_back(file.path().string());
+                    }
+                }
+                if (savedFiles.empty()) {
+                    std::cout << "Nenhum arquivo encontrado...\n";
+                    break;
+                }
+                while (true) {
+                    std::cout << "Escolha um arquivo:\n";
+                    int i = 1;
+                    for (const std::string& filename : savedFiles) {
+                        std::cout << "[" << i++ << "] - " << filename << "\n";
+                    }
+                    std::cout << "[" << i << "] - Voltar\n";
+
+                    int fileChoice = GetNumber();
+                    if (fileChoice >= 1 && fileChoice <= savedFiles.size()) {
+                        return savedFiles[fileChoice - 1];
+                    }
+                    else if (fileChoice == savedFiles.size() + 1) {
+                        break;
+                    }
+                }
+                break;
+            }
+            case 3: {
+                std::cout << "Saindo...";
+                return "";
+            }
+            default: {
+                std::cout << "Operação inválida, tente novamente:\n";
+                break;
+            }
+        }
+    }
+}
+
 int main(const int argc, char ** argv) {
     int maxGenerations = 1000000;
     if (argc >= 3) maxGenerations = std::stoi(argv[2]);
-
-    std::ifstream inputFile(argv[1]);
-    if (!inputFile.is_open()) {
-        throw std::runtime_error("Error opening input file!");
-    }
 
     int fileCount = 0;
     std::ifstream fileCounterIn("fileCounter.txt");
@@ -249,6 +332,15 @@ int main(const int argc, char ** argv) {
     }
     fileCounterIn >> fileCount;
 
+    std::ifstream inputFile;
+    std::string inputFileName =
+    MainMenu(inputFile);
+
+    if (inputFileName.empty()) {
+        return 0;
+    }
+
+    inputFile.open(inputFileName);
     GameBoard<char> board;
     ReadFile(inputFile, board);
 
@@ -352,9 +444,11 @@ int main(const int argc, char ** argv) {
                     }
                     if (event.key.keysym.sym == SDLK_BACKSPACE) {
                         fileCount++;
-                        std::ofstream outputFile("saves/saved_file_" + std::to_string(fileCount) + ".txt");
+                        std::string outFilename = "saves/saved_file_" + std::to_string(fileCount) + ".txt";
+                        std::ofstream outputFile(outFilename);
                         board.SaveToFile(outputFile);
                         outputFile.close();
+                        std::cout << "Dados da geração " << generation << " salvos no arquivo " << outFilename << "\n";
                     }
                     break;
                 default:
@@ -378,7 +472,9 @@ int main(const int argc, char ** argv) {
         if (!paused) {
             board.AdvanceBoardState();
         }
-        std::this_thread::sleep_for(std::chrono_literals::operator ""ms(100));
+        if (!paused) {
+            std::this_thread::sleep_for(std::chrono_literals::operator ""ms(250));
+        }
     }
 
     SDL_DestroyRenderer(renderer);
