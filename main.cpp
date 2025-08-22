@@ -4,10 +4,12 @@
 #include <vector>
 #include <thread>
 #include <SDL.h>
+#include <SDL_ttf.h>
 #include <set>
 
 #define DEFAULT_BOARD_HEIGHT 800
 #define DEFAULT_BOARD_WIDTH 600
+#define FONT_SIZE 24
 
 #define TRUE_VALUE '1'
 #define FALSE_VALUE '0'
@@ -15,7 +17,9 @@
 #define WINDOW_WIDTH 800
 #define WINDOW_HEIGHT 600
 
-std::string savesPath = "saves";
+const std::string savesPath = "saves";
+const std::string fontPath = "OpenSans.ttf";
+constexpr SDL_Color textColor = {255, 255, 255, 255};
 
 template<typename T>
 class GameBoard;
@@ -202,6 +206,7 @@ public:
         }
         _board(line, col) = TRUE_VALUE;
         _lifePositions.emplace(line, col);
+        _totalCount++;
     };
 
     void DestroyLife(const int line, const int col) {
@@ -242,9 +247,17 @@ int GetNumber() {
         std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
     }
     return n;
-}
+};
 
-std::string MainMenu(std::ifstream& in) {
+void DrawText(SDL_Renderer* renderer, const SDL_Rect& rect, const std::string& text, TTF_Font* textFont, const SDL_Color& color) {
+    SDL_Surface* textSurface = TTF_RenderText_Solid(textFont, text.c_str(), color);
+    SDL_Texture* textTexture = SDL_CreateTextureFromSurface(renderer, textSurface);
+    SDL_RenderCopy(renderer, textTexture, nullptr, &rect);
+};
+
+std::string MainMenu(std::ifstream& in, SDL_Window* window, SDL_Renderer* renderer, TTF_Font* textFont) {
+    SDL_Event event;
+    int choice = -1;
     while (true) {
         std::cout
         << "\n Selecione um modo de jogo pra começar:"
@@ -252,9 +265,58 @@ std::string MainMenu(std::ifstream& in) {
         << "\n [2] - Arquivo Salvo"
         << "\n [3] - Sair"
         << "\n";
-        const int choice = GetNumber();
+
+        std::vector<SDL_Rect> choiceRects = {};
+        std::vector<std::string> choiceRectText = {"Arquivo Vazio", "Arquivo Salvo", "Sair"};
+        for (int i = 1; i <= 3; i++) {
+            choiceRects.push_back({WINDOW_WIDTH / 3, WINDOW_HEIGHT * i / 5, WINDOW_WIDTH / 3, WINDOW_HEIGHT / 5});
+        }
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+        SDL_RenderClear(renderer);
+        SDL_SetRenderDrawColor(renderer, 255, 255, 255 ,255);
+        SDL_RenderDrawRects(renderer, choiceRects.data(), static_cast<int>(choiceRects.size()));
+
+
+        for (int i = 0; i < 3; i++) {
+            DrawText(renderer, choiceRects[i], choiceRectText[i], textFont, textColor);
+        }
+
+        SDL_RenderPresent(renderer);
+
+        while (choice < 0) {
+            SDL_PollEvent(&event);
+            if (event.type == SDL_MOUSEBUTTONDOWN) {
+                const int mouseX = event.button.x;
+                const int mouseY = event.button.y;
+                SDL_Point mousePos = {mouseX, mouseY};
+                for (int i = 0; i < choiceRects.size(); i++) {
+                    if (SDL_PointInRect(&mousePos, &choiceRects[i])) {
+                        choice = i + 1;
+                        break;
+                    }
+                }
+            }
+        }
+
         switch (choice) {
             case 1: {
+                std::vector<SDL_Rect> sizeChoiceRects = {};
+                for (int i = 1; i <= 5; i++) {
+                    sizeChoiceRects.push_back({WINDOW_WIDTH / 3, WINDOW_HEIGHT * i / 7, WINDOW_WIDTH / 3, WINDOW_HEIGHT / 7});
+                }
+                SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+                SDL_RenderClear(renderer);
+                SDL_SetRenderDrawColor(renderer, 255, 255, 255 ,255);
+                SDL_RenderDrawRects(renderer, sizeChoiceRects.data(), static_cast<int>(sizeChoiceRects.size()));
+
+                std::vector<std::string> sizeChoiceRectTexts = {"10 x 10", "25 x 25", "50 x 50", "100 x 100", "Voltar"};
+
+                for (int i = 0; i < 5; i++) {
+                    DrawText(renderer, sizeChoiceRects[i], sizeChoiceRectTexts[i], textFont, textColor);
+                }
+
+                SDL_RenderPresent(renderer);
+
                 while (true) {
                     std::cout
                     << "\nEscolha um tamanho de tabuleiro:"
@@ -264,19 +326,33 @@ std::string MainMenu(std::ifstream& in) {
                     << "\n[4] - 100x100"
                     << "\n[5] - Voltar"
                     << "\n";
-                    const int sizeChoice = GetNumber();
+                    int sizeChoice = -1;
+
+                    while (sizeChoice < 0) {
+                        SDL_PollEvent(&event);
+                        if (event.type == SDL_MOUSEBUTTONDOWN) {
+                            const int mouseX = event.button.x;
+                            const int mouseY = event.button.y;
+                            SDL_Point mousePos = {mouseX, mouseY};
+                            for (int i = 0; i < sizeChoiceRects.size(); i++) {
+                                if (SDL_PointInRect(&mousePos, &sizeChoiceRects[i])) {
+                                    sizeChoice = i + 1;
+                                    break;
+                                }
+                            }
+                        }
+                    }
                     if (sizeChoice >= 1 && sizeChoice <= 4) {
                         const std::vector<std::string> canvasFiles = {
-                            "10_10_canvas.txt",
-                            "25_25_canvas.txt",
-                            "50_50_canvas.txt",
-                            "100_100_canvas.txt"
+                            "templates/10_10_canvas.txt",
+                            "templates/25_25_canvas.txt",
+                            "templates/50_50_canvas.txt",
+                            "templates/100_100_canvas.txt"
                         };
                         return canvasFiles[sizeChoice - 1];
                     }
-                    else {
-                        break;
-                    }
+                    choice = -1;
+                    break;
                 }
                 break;
             }
@@ -288,22 +364,123 @@ std::string MainMenu(std::ifstream& in) {
                     }
                 }
                 if (savedFiles.empty()) {
-                    std::cout << "Nenhum arquivo encontrado...\n";
+                    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+                    SDL_RenderClear(renderer);
+                    SDL_SetRenderDrawColor(renderer, 255, 255, 255 ,255);
+                    SDL_Rect center = {WINDOW_WIDTH / 3, WINDOW_HEIGHT / 2, WINDOW_WIDTH / 2, WINDOW_HEIGHT / 2};
+                    DrawText(renderer, center, "Nenhum arquivo encontrado!", textFont, textColor);
+                    std::this_thread::sleep_for(static_cast<std::chrono::milliseconds>(2000));
+                    SDL_RenderPresent(renderer);
                     break;
                 }
                 while (true) {
-                    std::cout << "Escolha um arquivo:\n";
-                    int i = 1;
-                    for (const std::string& filename : savedFiles) {
-                        std::cout << "[" << i++ << "] - " << filename << "\n";
-                    }
-                    std::cout << "[" << i << "] - Voltar\n";
+                    // std::cout << "Escolha um arquivo:\n";
+                    // int i = 1;
+                    // for (const std::string& filename : savedFiles) {
+                    //     std::cout << "[" << i++ << "] - " << filename << "\n";
+                    // }
+                    // std::cout << "[" << i << "] - Voltar\n";
 
-                    int fileChoice = GetNumber();
-                    if (fileChoice >= 1 && fileChoice <= savedFiles.size()) {
-                        return savedFiles[fileChoice - 1];
+                    int fileChoice = -1;
+                    int currentPage = 0;
+
+                    std::vector<SDL_Rect> fileChoiceRects = {};
+                    for (int i = 1; i <= 5; i++) {
+                        fileChoiceRects.push_back({WINDOW_WIDTH / 3, WINDOW_HEIGHT * i / 7, WINDOW_WIDTH / 3, WINDOW_HEIGHT / 7});
                     }
-                    else if (fileChoice == savedFiles.size() + 1) {
+
+                    SDL_Rect advancePage = {WINDOW_WIDTH * 3 / 4, WINDOW_HEIGHT / 2, WINDOW_WIDTH / 10, WINDOW_HEIGHT / 10};
+
+                    SDL_Rect returnPage = {WINDOW_WIDTH / 4 - WINDOW_WIDTH / 10, WINDOW_HEIGHT / 2, WINDOW_WIDTH / 10, WINDOW_HEIGHT / 10};
+
+                    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+                    SDL_RenderClear(renderer);
+                    SDL_SetRenderDrawColor(renderer, 255, 255, 255 ,255);
+                    SDL_RenderDrawRect(renderer, &advancePage);
+                    SDL_RenderDrawRect(renderer, &returnPage);
+                    SDL_RenderDrawRects(renderer, fileChoiceRects.data(), static_cast<int>(fileChoiceRects.size()));
+                    for (int i = 0; i < 4; i++) {
+                        DrawText(renderer, fileChoiceRects[i], savedFiles[i], textFont, textColor);
+                    }
+                    DrawText(renderer, fileChoiceRects[4], "Voltar", textFont, textColor);
+                    DrawText(renderer, advancePage, ">", textFont, textColor);
+                    DrawText(renderer, returnPage, "<", textFont, textColor);
+
+                    SDL_RenderPresent(renderer);
+
+                    while (fileChoice < 0) {
+                        SDL_PollEvent(&event);
+                        if (event.type == SDL_MOUSEBUTTONDOWN) {
+                            const int mouseX = event.button.x;
+                            const int mouseY = event.button.y;
+                            SDL_Point mousePos = {mouseX, mouseY};
+                            if (SDL_PointInRect(&mousePos, &advancePage)) {
+                                if ((currentPage + 1) * 4 < savedFiles.size()) {
+                                    currentPage++;
+                                    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+                                    SDL_RenderClear(renderer);
+                                    SDL_SetRenderDrawColor(renderer, 255, 255, 255 ,255);
+                                    SDL_RenderDrawRect(renderer, &advancePage);
+                                    SDL_RenderDrawRect(renderer, &returnPage);
+                                    SDL_RenderDrawRects(renderer, fileChoiceRects.data(), static_cast<int>(fileChoiceRects.size()));
+                                    for (int i = 0; i < 4; i++) {
+                                        DrawText(renderer, fileChoiceRects[i], savedFiles[currentPage * 4 + i], textFont, textColor);
+                                    }
+                                    DrawText(renderer, fileChoiceRects[4], "Voltar", textFont, textColor);
+                                    DrawText(renderer, advancePage, ">", textFont, textColor);
+                                    DrawText(renderer, returnPage, "<", textFont, textColor);
+                                    SDL_RenderPresent(renderer);
+                                    std::cout << "pag " << currentPage << "\n";
+                                }
+                            }
+                            else if (SDL_PointInRect(&mousePos, &returnPage)) {
+                                if (currentPage > 0) {
+                                    currentPage--;
+                                    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+                                    SDL_RenderClear(renderer);
+                                    SDL_SetRenderDrawColor(renderer, 255, 255, 255 ,255);
+                                    SDL_RenderDrawRect(renderer, &advancePage);
+                                    SDL_RenderDrawRect(renderer, &returnPage);
+                                    SDL_RenderDrawRects(renderer, fileChoiceRects.data(), static_cast<int>(fileChoiceRects.size()));
+                                    for (int i = 0; i < 4; i++) {
+                                        DrawText(renderer, fileChoiceRects[i], savedFiles[currentPage * 4 + i], textFont, textColor);
+                                    }
+                                    DrawText(renderer, fileChoiceRects[4], "Voltar", textFont, textColor);
+                                    DrawText(renderer, advancePage, ">", textFont, textColor);
+                                    DrawText(renderer, returnPage, "<", textFont, textColor);
+                                    SDL_RenderPresent(renderer);
+                                }
+                            }
+                            else {
+                                for (int i = 0; i < fileChoiceRects.size(); i++) {
+                                    if (SDL_PointInRect(&mousePos, &fileChoiceRects[i])) {
+                                        std::cout << fileChoice + currentPage * 4;
+                                        fileChoice = i;
+                                        if (fileChoice + currentPage * 4 >= savedFiles.size()) {
+                                            fileChoice = -1;
+                                        }
+                                        else {
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+
+                    std::cout << "arquivo escolhido: "<< fileChoice;
+                    if (fileChoice == 4) {
+                        std::cout << "(quit)";
+                    }
+                    std::cout << "\n";
+                    if (fileChoice <= 3) {
+                        fileChoice = 4 * currentPage + fileChoice;
+                        std::cout << savedFiles[fileChoice];
+                        return savedFiles[fileChoice];
+                    }
+                    if (fileChoice == 4) {
+                        choice = -1;
                         break;
                     }
                 }
@@ -315,6 +492,7 @@ std::string MainMenu(std::ifstream& in) {
             }
             default: {
                 std::cout << "Operação inválida, tente novamente:\n";
+                choice = -1;
                 break;
             }
         }
@@ -332,17 +510,14 @@ int main(const int argc, char ** argv) {
     }
     fileCounterIn >> fileCount;
 
-    std::ifstream inputFile;
-    std::string inputFileName =
-    MainMenu(inputFile);
-
-    if (inputFileName.empty()) {
-        return 0;
+    if (TTF_Init() == -1) {
+        throw std::runtime_error("Could not initialize font system!");
     }
+    TTF_Font* textFont = TTF_OpenFont(fontPath.c_str(), FONT_SIZE);
 
-    inputFile.open(inputFileName);
-    GameBoard<char> board;
-    ReadFile(inputFile, board);
+    if (!textFont) {
+        throw std::runtime_error("Could not load font!");
+    }
 
     SDL_Init(SDL_INIT_VIDEO);
     SDL_Window* window = SDL_CreateWindow(
@@ -359,9 +534,25 @@ int main(const int argc, char ** argv) {
         SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC
         );
 
+
+    std::ifstream inputFile;
+    std::string inputFileName =
+    MainMenu(inputFile, window, renderer, textFont);
+
+    if (inputFileName.empty()) {
+        return 0;
+    }
+
+    inputFile.open(inputFileName);
+    GameBoard<char> board;
+    ReadFile(inputFile, board);
+
+
     SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
     int generation = 0;
     bool isRunning = true;
+
+
 
     const int sizeRatioX = WINDOW_WIDTH / board.GetCols();
     const int sizeRatioY = WINDOW_HEIGHT / board.GetLines();
