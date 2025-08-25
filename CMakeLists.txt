@@ -5,7 +5,11 @@ project(${PROJECT_NAME})
 
 set(CMAKE_CXX_STANDARD 17)
 
-add_executable(GameOfLife main.cpp)
+add_executable(GameOfLife main.cpp
+        Matrix.h
+        GameBoard.h
+        VideoManager.h
+)
 
 find_package(SDL2 2.32.2 EXACT REQUIRED)
 
