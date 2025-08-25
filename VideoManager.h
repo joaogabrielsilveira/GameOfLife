@@ -106,7 +106,7 @@ public:
         SDL_Quit();
     };
 
-    void DrawMenu(const int numOptions, std::vector<SDL_Rect>& boxes, const std::vector<std::string>& texts) const {
+    void DrawMenu(const int numOptions, std::vector<SDL_Rect>& boxes, const std::vector<std::string>& texts, const bool forceBackButton = false) const {
         for (int i = 1; i <= numOptions; i++) {
             SDL_Rect currentBox = {
                 WINDOW_WIDTH / 3, WINDOW_HEIGHT * i / (numOptions + 2),
@@ -121,9 +121,13 @@ public:
             if (i >= texts.size()) break;
             DrawText(boxes[i], texts[i]);
         }
+
+        if (forceBackButton) {
+            DrawText(boxes[numOptions - 1], "Voltar");
+        }
     };
 
-    int HandleChoice(const SDL_Point& mousePos, const std::vector<SDL_Rect>& boxes) const {
+    [[nodiscard]] int HandleChoice(const SDL_Point& mousePos, const std::vector<SDL_Rect>& boxes) const {
         for (int i = 0; i < boxes.size(); i++) {
             if (SDL_PointInRect(&mousePos, &boxes[i])) {
                 return i;
@@ -233,7 +237,7 @@ public:
                         choice = -1;
                         break;
                     }
-                    // TODO: fix back button
+
                     while (true) {
                         int fileChoice = -1;
                         int currentPage = 0;
@@ -247,7 +251,7 @@ public:
                         }
                         fileChoiceRectTexts.push_back("Voltar");
                         
-                        DrawMenu(5, fileChoiceRects, fileChoiceRectTexts);
+                        DrawMenu(5, fileChoiceRects, fileChoiceRectTexts, true);
                         DrawPageChangeArrows(advancePage, returnPage);
                         RenderPresent();
 
@@ -271,9 +275,8 @@ public:
                                             }
                                             fileChoiceRectTexts.push_back(savedFiles[currentPage * 4 + i]);
                                         }
-                                        DrawMenu(5, fileChoiceRects, fileChoiceRectTexts);
+                                        DrawMenu(5, fileChoiceRects, fileChoiceRectTexts, true);
                                         DrawPageChangeArrows(advancePage, returnPage);
-                                        std::cout << std::endl;
                                         RenderPresent();
                                     }
                                 }
@@ -289,15 +292,13 @@ public:
                                             }
                                             fileChoiceRectTexts.push_back(savedFiles[currentPage * 4 + i]);
                                         }
-                                        DrawMenu(5, fileChoiceRects, fileChoiceRectTexts);
+                                        DrawMenu(5, fileChoiceRects, fileChoiceRectTexts, true);
                                         DrawPageChangeArrows(advancePage, returnPage);
                                         RenderPresent();
                                     }
                                 }
                                 else {
                                     fileChoice = HandleChoice(mousePos, fileChoiceRects);
-                                    std::cout << fileChoice << std::endl;
-                                    std::cout << fileChoice + currentPage * 4 << std::endl;
                                     if (fileChoice + currentPage * 4 >= savedFiles.size() && fileChoice < 4) {
                                         fileChoice = -1;
                                     }
@@ -307,7 +308,6 @@ public:
 
                         if (fileChoice < 4) {
                             fileChoice = 4 * currentPage + fileChoice;
-                            std::cout << savedFiles[fileChoice] << std::endl;
                             return savedFiles[fileChoice];
                         }
                         if (fileChoice == 4) {
