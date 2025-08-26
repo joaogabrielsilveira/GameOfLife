@@ -4,11 +4,9 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
-#include <vector>
 #include <thread>
 #include <SDL.h>
 #include <SDL_ttf.h>
-#include <set>
 #include "Matrix.h"
 #include "GameBoard.h"
 #include "MenuManager.h"
@@ -34,7 +32,7 @@ int main(const int argc, char ** argv) {
     int maxGenerations = 100000;
 
     int fileCount = 0;
-    std::ifstream fileCounterIn("aux/fileCounter.txt");
+    std::ifstream fileCounterIn("auxi/fileCounter.txt");
     if (!fileCounterIn.is_open()) {
         throw std::runtime_error("Erro ao abrir arquivo de contagem!");
     }
@@ -248,7 +246,7 @@ int main(const int argc, char ** argv) {
 
     fileCounterIn.close();
     
-    std::ofstream fileCounterOut("aux/fileCounter.txt");
+    std::ofstream fileCounterOut("auxi/fileCounter.txt");
     if (!fileCounterOut.is_open()) {
         throw std::runtime_error("Erro ao abrir arquivo de contagem!");
     }
