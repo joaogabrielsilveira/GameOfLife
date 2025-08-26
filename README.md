@@ -1,3 +1,6 @@
+# Instruções de execução
+## Baixe o código do programa como .zip (ou outro formato), então extraia e abra a pasta com o CLion. Aceite as configurações de debug e clique no botão "Run" (ou shift + F10).
+
 # Descrição
 ## Esse projeto é uma implementação do clássico jogo *Conway's Game of Life*, com uma interface gráfica e funcionalidades acrescidas.
 
