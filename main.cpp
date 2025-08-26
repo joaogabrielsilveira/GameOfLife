@@ -11,6 +11,7 @@
 #include <set>
 #include "Matrix.h"
 #include "GameBoard.h"
+#include "MenuManager.h"
 #include "VideoManager.h"
 
 constexpr SDL_Color textColor = {255, 255, 255, 255};
@@ -30,26 +31,29 @@ void ReadFile(std::ifstream& inputFile, GameBoard<char>& board) {
 };
 
 int main(const int argc, char ** argv) {
-    int maxGenerations = 1000000;
-    if (argc >= 3) maxGenerations = std::stoi(argv[2]);
+    int maxGenerations = 100000;
 
     int fileCount = 0;
-    std::ifstream fileCounterIn("fileCounter.txt");
+    std::ifstream fileCounterIn("aux/fileCounter.txt");
     if (!fileCounterIn.is_open()) {
-        throw std::runtime_error("Error opening count file!");
+        throw std::runtime_error("Erro ao abrir arquivo de contagem!");
     }
     fileCounterIn >> fileCount;
 
     if (TTF_Init() == -1) {
-        throw std::runtime_error("Could not initialize font system!");
+        throw std::runtime_error("Erro ao inicializar sistema de texto!");
     }
     TTF_Font* textFont = TTF_OpenFont(fontPath.c_str(), FONT_SIZE);
 
     if (!textFont) {
-        throw std::runtime_error("Could not load font!");
+        throw std::runtime_error("Erro ao carregar a fonte!");
     }
 
-    SDL_Init(SDL_INIT_VIDEO);
+    if (SDL_Init(SDL_INIT_VIDEO) < 0) {
+        SDL_Log("Erro ao inicializar o sistema de vídeo.");
+        return -1;
+    }
+
     SDL_Window* window = SDL_CreateWindow(
         "Game of Life",
         SDL_WINDOWPOS_CENTERED,
@@ -58,27 +62,43 @@ int main(const int argc, char ** argv) {
         WINDOW_HEIGHT,
         SDL_WINDOW_SHOWN
         );
+
+    if (window == nullptr) {
+        SDL_Log("Erro ao criar a janela de vídeo.");
+        SDL_Quit();
+        return -1;
+    }
+
     SDL_Renderer* renderer = SDL_CreateRenderer(
         window,
         -1,
         SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC
         );
 
+    if (renderer == nullptr) {
+        SDL_Log("Erro ao criar o renderizador.");
+        SDL_DestroyWindow(window);
+        SDL_Quit();
+        return -1;
+    }
+
+    GameBoard<char> board;
     auto vm = VideoManager(renderer, window, textFont);
+    auto mm = MenuManager(vm, board);
 
     std::ifstream inputFile;
     std::string inputFileName =
-    vm.MainMenu(inputFile);
+    mm.MainMenu(inputFile);
 
     if (inputFileName.empty()) {
         vm.Terminate();
         return 0;
     }
 
-    inputFile.open(inputFileName);
-    GameBoard<char> board;
-    ReadFile(inputFile, board);
-
+    if (inputFileName != "0") {
+        inputFile.open(inputFileName);
+        ReadFile(inputFile, board);
+    }
 
     SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
     int generation = 0;
@@ -91,19 +111,19 @@ int main(const int argc, char ** argv) {
     const double sryF = static_cast<double>(WINDOW_HEIGHT) / board.GetLines();
 
     if (ceil(srxF) > sizeRatioX && ceil(sryF) > sizeRatioY) {
-        SDL_SetWindowSize(window, board.GetCols() * sizeRatioX + WINDOW_WIDTH / 8, board.GetLines() * sizeRatioY);
+        vm.SetWindowSize(board.GetCols() * sizeRatioX + WINDOW_WIDTH / 8, board.GetLines() * sizeRatioY);
     }
 
     else if (ceil(sryF) > sizeRatioY) {
-        SDL_SetWindowSize(window, WINDOW_WIDTH + WINDOW_WIDTH / 8, board.GetLines() * sizeRatioY);
+        vm.SetWindowSize(WINDOW_WIDTH + WINDOW_WIDTH / 8, board.GetLines() * sizeRatioY);
     }
 
     else if (ceil(srxF) > sizeRatioX) {
-        SDL_SetWindowSize(window, board.GetCols() * sizeRatioX + WINDOW_WIDTH / 8, WINDOW_HEIGHT);
+        vm.SetWindowSize(board.GetCols() * sizeRatioX + WINDOW_WIDTH / 8, WINDOW_HEIGHT);
     }
 
     else {
-        SDL_SetWindowSize(window, WINDOW_WIDTH + WINDOW_WIDTH / 8, WINDOW_HEIGHT);
+        vm.SetWindowSize(WINDOW_WIDTH + WINDOW_WIDTH / 8, WINDOW_HEIGHT);
     }
 
     bool paused = false;
@@ -209,26 +229,18 @@ int main(const int argc, char ** argv) {
             }
         }
 
-        if (window == nullptr) {
-            std::cout << "\nGeneration " << generation << "\n";
-        }
-        else {
-            std::string windowTitle = "Game of Life - Generation " + std::to_string(generation);
-            if (paused) windowTitle += " (Pausado)";
-            SDL_SetWindowTitle(window, windowTitle.c_str());
-        }
-        if (renderer == nullptr) {
-            board.Print();
-        }
-        else {
-            board.Render(renderer, sizeRatioX, sizeRatioY);
-            vm.RenderDrawCircle(circleCenter, circleRadius);
-            vm.RenderPresent();
-        }
+        std::string windowTitle = "Game of Life - Generation " + std::to_string(generation);
+        if (paused) windowTitle += " (Pausado)";
+        vm.SetWindowTitle(windowTitle);
+
+        board.Render(renderer, sizeRatioX, sizeRatioY);
+        vm.RenderDrawCircle(circleCenter, circleRadius);
+        vm.RenderPresent();
+
         if (!paused) {
             board.AdvanceBoardState();
             int msDelay = circleCenter.y * circleCenter.y / WINDOW_HEIGHT;
-            std::this_thread::sleep_for(std::chrono_literals::operator ""ms(msDelay));
+            std::this_thread::sleep_for(std::chrono::milliseconds(msDelay));
         }
     }
 
@@ -236,9 +248,9 @@ int main(const int argc, char ** argv) {
 
     fileCounterIn.close();
     
-    std::ofstream fileCounterOut("fileCounter.txt");
+    std::ofstream fileCounterOut("aux/fileCounter.txt");
     if (!fileCounterOut.is_open()) {
-        throw std::runtime_error("Error opening count file!");
+        throw std::runtime_error("Erro ao abrir arquivo de contagem!");
     }
     fileCounterOut << fileCount;
     fileCounterOut.close();

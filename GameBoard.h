@@ -1,15 +1,11 @@
-//
-// Created by john on 2025-08-25.
-//
+#ifndef GAMEOFLIFE_GAMEBOARD_H
+#define GAMEOFLIFE_GAMEBOARD_H
 
 #pragma once
 
 #include "Matrix.h"
 #include <set>
 #include <SDL.h>
-
-#ifndef GAMEOFLIFE_GAMEBOARD_H
-#define GAMEOFLIFE_GAMEBOARD_H
 
 #define DEFAULT_BOARD_HEIGHT 50
 #define DEFAULT_BOARD_WIDTH 50
@@ -152,6 +148,12 @@ public:
         }
         _board(line, col) = FALSE_VALUE;
         _lifePositions.erase(std::pair<int,int>(line, col));
+    };
+
+    void InitEmpty(int lines, int cols) {
+        _board = Matrix<T>(lines, cols);
+        _height = lines;
+        _width = cols;
     };
 
 private:

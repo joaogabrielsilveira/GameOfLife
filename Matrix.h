@@ -1,14 +1,11 @@
-//
-// Created by john on 2025-08-25.
-//
+#ifndef GAMEOFLIFE_MATRIX_H
+#define GAMEOFLIFE_MATRIX_H
+
 #pragma once
 
 #include <vector>
 #include <stdexcept>
 #include <iostream>
-
-#ifndef GAMEOFLIFE_MATRIX_H
-#define GAMEOFLIFE_MATRIX_H
 
 #define TRUE_VALUE '1'
 #define FALSE_VALUE '0'

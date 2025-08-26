@@ -9,6 +9,7 @@ add_executable(GameOfLife main.cpp
         Matrix.h
         GameBoard.h
         VideoManager.h
+        MenuManager.h
 )
 
 find_package(SDL2 2.32.2 EXACT REQUIRED)
